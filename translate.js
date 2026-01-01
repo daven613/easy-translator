@@ -54,52 +54,77 @@ function initializeDatabase(dbPath) {
 }
 
 /**
- * Split text into chunks, preserving paragraph and sentence boundaries
+ * Smart chunking - finds best break points in priority order:
+ * 1. Paragraph breaks (double newline)
+ * 2. Sentence endings (. ! ?)
+ * 3. Commas
+ * 4. Spaces
  */
-function splitTextIntoChunks(text, chunkSize) {
+function splitTextIntoChunks(text, chunkSize = 4000) {
   const chunks = [];
   let startPos = 0;
 
   while (startPos < text.length) {
-    let maxEndPos = Math.min(startPos + chunkSize, text.length);
+    // If remaining text fits in one chunk, take it all
+    if (startPos + chunkSize >= text.length) {
+      chunks.push(text.substring(startPos));
+      break;
+    }
 
-    if (maxEndPos < text.length) {
-      // Try to find break points in order of preference
+    const searchStart = startPos + Math.floor(chunkSize * 0.5); // Don't break too early
+    const searchEnd = startPos + chunkSize;
+    const searchRegion = text.substring(searchStart, searchEnd);
 
-      // 1. Double newline (paragraph break)
-      let breakPos = -1;
-      for (let i = maxEndPos; i > startPos + (chunkSize / 2); i--) {
-        if (text[i] === '\n' && text[i-1] === '\n') {
-          breakPos = i + 1;
+    let breakOffset = -1;
+
+    // Priority 1: Paragraph break (double newline)
+    const paragraphMatch = searchRegion.lastIndexOf('\n\n');
+    if (paragraphMatch !== -1) {
+      breakOffset = paragraphMatch + 2; // After the double newline
+    }
+
+    // Priority 2: Sentence ending (. ! ? followed by space or newline)
+    if (breakOffset === -1) {
+      for (let i = searchRegion.length - 1; i >= 0; i--) {
+        const char = searchRegion[i];
+        const prevChar = i > 0 ? searchRegion[i - 1] : '';
+        if ((prevChar === '.' || prevChar === '!' || prevChar === '?') &&
+            (char === ' ' || char === '\n')) {
+          breakOffset = i;
           break;
-        }
-      }
-
-      if (breakPos !== -1) {
-        maxEndPos = breakPos;
-      } else {
-        // 2. Sentence ending (.!?)
-        for (let i = maxEndPos; i > Math.max(startPos, maxEndPos - 500); i--) {
-          if ((text[i-1] === '.' || text[i-1] === '!' || text[i-1] === '?') &&
-              (text[i] === ' ' || text[i] === '\n')) {
-            maxEndPos = i;
-            break;
-          }
-        }
-      }
-
-      // 3. Last resort: space
-      if (maxEndPos === Math.min(startPos + chunkSize, text.length)) {
-        let spacePos = text.lastIndexOf(' ', maxEndPos);
-        if (spacePos !== -1 && spacePos > startPos) {
-          maxEndPos = spacePos + 1;
         }
       }
     }
 
-    const chunk = text.substring(startPos, maxEndPos);
-    chunks.push(chunk);
-    startPos = maxEndPos;
+    // Priority 3: Comma followed by space
+    if (breakOffset === -1) {
+      for (let i = searchRegion.length - 1; i >= 0; i--) {
+        if (searchRegion[i] === ' ' && i > 0 && searchRegion[i - 1] === ',') {
+          breakOffset = i;
+          break;
+        }
+      }
+    }
+
+    // Priority 4: Any space
+    if (breakOffset === -1) {
+      const lastSpace = searchRegion.lastIndexOf(' ');
+      if (lastSpace !== -1) {
+        breakOffset = lastSpace + 1;
+      }
+    }
+
+    // Calculate actual break position
+    let breakPos;
+    if (breakOffset !== -1) {
+      breakPos = searchStart + breakOffset;
+    } else {
+      // No good break point found, hard cut at chunk size
+      breakPos = searchEnd;
+    }
+
+    chunks.push(text.substring(startPos, breakPos));
+    startPos = breakPos;
   }
 
   return chunks;
@@ -127,19 +152,29 @@ function storeChunksInDatabase(db, chunks, sourceLang, targetLang, chunkSize) {
           VALUES (?, ?, ?, ?, ?)
         `);
 
+        let insertCount = 0;
+        const totalChunks = chunks.length;
+
         for (let i = 0; i < chunks.length; i++) {
-          stmt.run(i, chunks[i], sourceLang, targetLang, chunkSize);
+          stmt.run(i, chunks[i], sourceLang, targetLang, chunkSize, (err) => {
+            if (err) {
+              console.error(`Error inserting chunk ${i}:`, err);
+            }
+            insertCount++;
+
+            // When all inserts are done, finalize and commit
+            if (insertCount === totalChunks) {
+              stmt.finalize();
+              db.run('COMMIT', (err) => {
+                if (err) {
+                  reject(err);
+                  return;
+                }
+                resolve();
+              });
+            }
+          });
         }
-
-        stmt.finalize();
-
-        db.run('COMMIT', (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
-        });
       });
     });
   });
