@@ -1,0 +1,17 @@
+{
+  "name": "easy-translator",
+  "version": "1.0.0",
+  "description": "Simple large file translator using OpenAI with resume support",
+  "main": "translate.js",
+  "scripts": {
+    "translate": "node translate.js"
+  },
+  "keywords": ["translator", "openai", "large-files"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "openai": "^4.86.2",
+    "sqlite3": "^5.1.7"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.db
+test_*.txt
+large_*.txt
+*_output.txt
