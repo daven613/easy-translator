@@ -377,7 +377,8 @@
         body: JSON.stringify({
           model: model,
           instructions: `${prompt}\n\nPreserve the original formatting and paragraph breaks. Only output the translation, no explanations.`,
-          input: text
+          input: text,
+          reasoning: { effort: "low" }
         })
       });
 
