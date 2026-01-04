@@ -4,3 +4,4 @@ node_modules/
 test_*.txt
 large_*.txt
 *_output.txt
+uploads/
