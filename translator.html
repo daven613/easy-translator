@@ -366,9 +366,9 @@
       return chunks;
     }
 
-    // OpenAI API call
+    // OpenAI Responses API call
     async function translateChunk(text, prompt, model, apiKey) {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -376,14 +376,8 @@
         },
         body: JSON.stringify({
           model: model,
-          messages: [
-            {
-              role: 'system',
-              content: `${prompt}\n\nPreserve the original formatting and paragraph breaks. Only output the translation, no explanations.`
-            },
-            { role: 'user', content: text }
-          ],
-          temperature: 0.3
+          instructions: `${prompt}\n\nPreserve the original formatting and paragraph breaks. Only output the translation, no explanations.`,
+          input: text
         })
       });
 
@@ -393,7 +387,7 @@
       }
 
       const data = await response.json();
-      return data.choices[0].message.content.trim();
+      return data.output_text.trim();
     }
 
     // Check for pending work
