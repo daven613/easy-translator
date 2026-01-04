@@ -387,7 +387,12 @@
       }
 
       const data = await response.json();
-      return data.output_text.trim();
+      // Find the message output with text content
+      const messageOutput = data.output.find(o => o.type === 'message');
+      if (messageOutput && messageOutput.content && messageOutput.content[0]) {
+        return messageOutput.content[0].text.trim();
+      }
+      throw new Error('No text output in response');
     }
 
     // Check for pending work
